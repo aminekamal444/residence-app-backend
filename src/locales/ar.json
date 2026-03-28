@@ -1,0 +1,80 @@
+{
+  "auth": {
+    "login_success": "تم تسجيل الدخول بنجاح",
+    "login_error": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "register_success": "تم إنشاء الحساب بنجاح",
+    "register_error": "البريد الإلكتروني مسجل بالفعل",
+    "invalid_token": "رمز غير صحيح أو منتهي الصلاحية",
+    "password_changed": "تم تغيير كلمة المرور بنجاح",
+    "device_token_added": "تم تسجيل رمز الجهاز"
+  },
+  "charge": {
+    "created": "تم إنشاء رسم جديد",
+    "created_message": "رسم جديد: €{amount} مستحق {dueDate}",
+    "due_soon": "الدفع مستحق قريباً",
+    "due_today": "الدفع مستحق اليوم",
+    "overdue_7days": "الدفع متأخر 7 أيام",
+    "overdue_14days": "الدفع متأخر 14 يوم",
+    "payment_received": "تم استلام الدفع بنجاح",
+    "payment_failed": "فشل الدفع"
+  },
+  "task": {
+    "assigned": "تم تعيين مهمة جديدة",
+    "assigned_message": "مهمة: {taskTitle}",
+    "assigned_urgent": "تم تعيين مهمة عاجلة",
+    "started": "تمت بدء المهمة",
+    "in_progress": "المهمة جارية",
+    "submitted": "تم تقديم المهمة للموافقة",
+    "completed": "تمت المهمة بنجاح",
+    "rejected": "تم رفض المهمة",
+    "rejected_message": "السبب: {reason}",
+    "overdue": "المهمة متأخرة"
+  },
+  "budget": {
+    "exceeded": "تم تجاوز الميزانية",
+    "exceeded_message": "ميزانية {category} تم تجاوزها بمقدار €{amount}",
+    "warning": "تحذير الميزانية",
+    "warning_message": "ميزانية {category} بنسبة {percentage}%",
+    "on_track": "الميزانية على المسار الصحيح"
+  },
+  "announcement": {
+    "created": "تم نشر إعلان جديد",
+    "emergency": "🚨 تنبيه عاجل",
+    "message": "{title}"
+  },
+  "complaint": {
+    "created": "تم استلام الشكوى",
+    "status_updated": "تم تحديث حالة الشكوى",
+    "resolved": "تم حل الشكوى",
+    "rating_request": "يرجى تقييم خدمتنا"
+  },
+  "vote": {
+    "created": "تم بدء تصويت جديد",
+    "message": "{title}",
+    "results": "نتائج التصويت متاحة",
+    "results_message": "فاز {winningOption} بنسبة {percentage}%"
+  },
+  "errors": {
+    "user_not_found": "لم يتم العثور على المستخدم",
+    "invalid_email": "عنوان بريد إلكتروني غير صحيح",
+    "password_mismatch": "كلمات المرور غير متطابقة",
+    "unauthorized": "وصول غير مصرح به",
+    "forbidden": "وصول ممنوع",
+    "validation_error": "خطأ في التحقق",
+    "server_error": "حدث خطأ في الخادم",
+    "duplicate_email": "البريد الإلكتروني موجود بالفعل",
+    "apartment_occupied": "الشقة مشغولة بالفعل"
+  },
+  "alerts": {
+    "payment_overdue": "الدفع متأخر",
+    "cash_flow_low": "تحذير تدفق النقد المنخفض",
+    "task_overdue": "المهمة متأخرة",
+    "performance_alert": "تنبيه الأداء"
+  },
+  "success": {
+    "created": "تم الإنشاء بنجاح",
+    "updated": "تم التحديث بنجاح",
+    "deleted": "تم الحذف بنجاح",
+    "saved": "تم الحفظ بنجاح"
+  }
+}

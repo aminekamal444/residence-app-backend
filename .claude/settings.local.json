@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM3MWI0MTE4OGUwOTlmM2RiYmIyODUiLCJyb2xlIjoic3luZGljIiwiYnVpbGRpbmciOm51bGwsImlhdCI6MTc3NDY1NjMzNCwiZXhwIjoxNzc0NjU3MjM0fQ.C1kp4NuCrr3VwqQ-qaV4KDjuZT8e9ANAKja5eost12A\" __NEW_LINE_b8c7d7edaeb09cd5__ echo \"=== GET /apartments ===\" curl -s http://localhost:5001/api/v1/apartments -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(python -m json.tool 2)",
+      "Bash(/dev/null __NEW_LINE_b8c7d7edaeb09cd5__ echo '=== GET /users/statistics/all ===' curl -s http://localhost:5001/api/v1/users/statistics/all -H 'Authorization: Bearer $TOKEN')",
+      "Bash(/dev/null __NEW_LINE_b8c7d7edaeb09cd5__ echo '=== PUT /users/:id \\(update user\\) ===' curl -s -X PUT http://localhost:5001/api/v1/users/69c71b41188e099f3dbbb285 -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"\"\"\"name\"\"\"\":\"\"\"\"Updated Syndic Name\"\"\"\"}')",
+      "Bash(python -m json.tool)",
+      "Bash(npm test:*)",
+      "Bash(node:*)",
+      "Bash(npx jest:*)"
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "auth": {
+    "login_success": "Login successful",
+    "login_error": "Invalid email or password",
+    "register_success": "Account created successfully",
+    "register_error": "Email already registered",
+    "invalid_token": "Invalid or expired token",
+    "password_changed": "Password changed successfully",
+    "device_token_added": "Device token registered"
+  },
+  "charge": {
+    "created": "New charge created",
+    "created_message": "New charge: €{amount} due {dueDate}",
+    "due_soon": "Payment due soon",
+    "due_today": "Payment due today",
+    "overdue_7days": "Payment 7 days overdue",
+    "overdue_14days": "Payment 14 days overdue",
+    "payment_received": "Payment received successfully",
+    "payment_failed": "Payment failed"
+  },
+  "task": {
+    "assigned": "New task assigned",
+    "assigned_message": "Task: {taskTitle}",
+    "assigned_urgent": "URGENT task assigned",
+    "started": "Task started",
+    "in_progress": "Task in progress",
+    "submitted": "Task submitted for approval",
+    "completed": "Task completed successfully",
+    "rejected": "Task rejected",
+    "rejected_message": "Reason: {reason}",
+    "overdue": "Task overdue"
+  },
+  "budget": {
+    "exceeded": "Budget exceeded",
+    "exceeded_message": "{category} budget exceeded by €{amount}",
+    "warning": "Budget warning",
+    "warning_message": "{category} budget at {percentage}%",
+    "on_track": "Budget on track"
+  },
+  "announcement": {
+    "created": "New announcement posted",
+    "emergency": "🚨 EMERGENCY ALERT",
+    "message": "{title}"
+  },
+  "complaint": {
+    "created": "Complaint received",
+    "status_updated": "Complaint status updated",
+    "resolved": "Complaint resolved",
+    "rating_request": "Please rate our service"
+  },
+  "vote": {
+    "created": "New vote started",
+    "message": "{title}",
+    "results": "Vote results available",
+    "results_message": "{winningOption} won with {percentage}%"
+  },
+  "errors": {
+    "user_not_found": "User not found",
+    "invalid_email": "Invalid email address",
+    "password_mismatch": "Passwords do not match",
+    "unauthorized": "Unauthorized access",
+    "forbidden": "Access forbidden",
+    "validation_error": "Validation error",
+    "server_error": "Server error occurred",
+    "duplicate_email": "Email already exists",
+    "apartment_occupied": "Apartment already occupied"
+  },
+  "alerts": {
+    "payment_overdue": "Payment overdue",
+    "cash_flow_low": "Low cash flow warning",
+    "task_overdue": "Task is overdue",
+    "performance_alert": "Performance alert"
+  },
+  "success": {
+    "created": "Created successfully",
+    "updated": "Updated successfully",
+    "deleted": "Deleted successfully",
+    "saved": "Saved successfully"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "auth": {
+    "login_success": "Connexion réussie",
+    "login_error": "Email ou mot de passe invalide",
+    "register_success": "Compte créé avec succès",
+    "register_error": "Email déjà enregistré",
+    "invalid_token": "Token invalide ou expiré",
+    "password_changed": "Mot de passe changé avec succès",
+    "device_token_added": "Token d'appareil enregistré"
+  },
+  "charge": {
+    "created": "Nouvelle charge créée",
+    "created_message": "Nouvelle charge: €{amount} due {dueDate}",
+    "due_soon": "Paiement à venir bientôt",
+    "due_today": "Paiement dû aujourd'hui",
+    "overdue_7days": "Paiement en retard de 7 jours",
+    "overdue_14days": "Paiement en retard de 14 jours",
+    "payment_received": "Paiement reçu avec succès",
+    "payment_failed": "Le paiement a échoué"
+  },
+  "task": {
+    "assigned": "Nouvelle tâche assignée",
+    "assigned_message": "Tâche: {taskTitle}",
+    "assigned_urgent": "Tâche URGENTE assignée",
+    "started": "Tâche commencée",
+    "in_progress": "Tâche en cours",
+    "submitted": "Tâche soumise pour approbation",
+    "completed": "Tâche terminée avec succès",
+    "rejected": "Tâche rejetée",
+    "rejected_message": "Raison: {reason}",
+    "overdue": "Tâche en retard"
+  },
+  "budget": {
+    "exceeded": "Budget dépassé",
+    "exceeded_message": "Budget {category} dépassé de €{amount}",
+    "warning": "Avertissement budgétaire",
+    "warning_message": "Budget {category} à {percentage}%",
+    "on_track": "Budget respecté"
+  },
+  "announcement": {
+    "created": "Nouvelle annonce publiée",
+    "emergency": "🚨 ALERTE URGENTE",
+    "message": "{title}"
+  },
+  "complaint": {
+    "created": "Réclamation reçue",
+    "status_updated": "Statut de réclamation mis à jour",
+    "resolved": "Réclamation résolue",
+    "rating_request": "Veuillez évaluer notre service"
+  },
+  "vote": {
+    "created": "Nouveau vote lancé",
+    "message": "{title}",
+    "results": "Résultats du vote disponibles",
+    "results_message": "{winningOption} a gagné avec {percentage}%"
+  },
+  "errors": {
+    "user_not_found": "Utilisateur non trouvé",
+    "invalid_email": "Adresse email invalide",
+    "password_mismatch": "Les mots de passe ne correspondent pas",
+    "unauthorized": "Accès non autorisé",
+    "forbidden": "Accès interdit",
+    "validation_error": "Erreur de validation",
+    "server_error": "Erreur serveur",
+    "duplicate_email": "Email existe déjà",
+    "apartment_occupied": "Appartement déjà occupé"
+  },
+  "alerts": {
+    "payment_overdue": "Paiement en retard",
+    "cash_flow_low": "Avertissement de flux de trésorerie faible",
+    "task_overdue": "Tâche en retard",
+    "performance_alert": "Alerte de performance"
+  },
+  "success": {
+    "created": "Créé avec succès",
+    "updated": "Mis à jour avec succès",
+    "deleted": "Supprimé avec succès",
+    "saved": "Enregistré avec succès"
+  }
+}
