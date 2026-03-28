@@ -1,81 +1,55 @@
 const express = require('express');
-const { param, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
-
-const notificationService = require('../services/notificationService');
-const { ApiResponse } = require('../utils/responseFormatter');
-const authMiddleware = require('../middleware/authMiddleware');
-
 const router = express.Router();
 
-const notificationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: 'Too many notification requests'
-});
+const notificationService = require('../services/notificationService');
+const authMiddleware = require('../middleware/authMiddleware');
 
-const validateId = param('notificationId')
-  .isMongoId()
-  .withMessage('Invalid notification ID');
-
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ statusCode: 400, success: false, message: 'Validation error', errors: errors.array() });
-  }
-  next();
-};
-
-// GET /api/v1/notifications — get my notifications
-router.get('/', authMiddleware, notificationLimiter, async (req, res, next) => {
+// ─── GET / — get my notifications ─────────────────────────────────────────
+router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const { limit = 20, status } = req.query;
-    const notifications = await notificationService.getUserNotifications(
-      req.user._id,
-      Number(limit),
-      status || null
-    );
-    res.status(200).json(new ApiResponse(200, notifications, 'Notifications retrieved successfully'));
+    const notifications = await notificationService.getUserNotifications(req.user._id, Number(limit), status || null);
+    res.json({ success: true, message: 'Notifications retrieved', data: notifications });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /api/v1/notifications/unread-count
-router.get('/unread-count', authMiddleware, notificationLimiter, async (req, res, next) => {
+// ─── GET /unread-count — how many unread notifications I have ─────────────
+router.get('/unread-count', authMiddleware, async (req, res, next) => {
   try {
     const count = await notificationService.getUnreadCount(req.user._id);
-    res.status(200).json(new ApiResponse(200, { count }, 'Unread count retrieved'));
+    res.json({ success: true, message: 'Unread count retrieved', data: { count } });
   } catch (error) {
     next(error);
   }
 });
 
-// PUT /api/v1/notifications/mark-all-read
-router.put('/mark-all-read', authMiddleware, notificationLimiter, async (req, res, next) => {
+// ─── PUT /mark-all-read — mark all my notifications as read ───────────────
+router.put('/mark-all-read', authMiddleware, async (req, res, next) => {
   try {
     const result = await notificationService.markAllAsRead(req.user._id);
-    res.status(200).json(new ApiResponse(200, { modified: result.modifiedCount }, 'All notifications marked as read'));
+    res.json({ success: true, message: 'All notifications marked as read', data: { modified: result.modifiedCount } });
   } catch (error) {
     next(error);
   }
 });
 
-// PUT /api/v1/notifications/:notificationId/read
-router.put('/:notificationId/read', authMiddleware, notificationLimiter, validateId, handleValidationErrors, async (req, res, next) => {
+// ─── PUT /:notificationId/read — mark one notification as read ─────────────
+router.put('/:notificationId/read', authMiddleware, async (req, res, next) => {
   try {
     const notification = await notificationService.markAsRead(req.params.notificationId);
-    res.status(200).json(new ApiResponse(200, notification, 'Notification marked as read'));
+    res.json({ success: true, message: 'Notification marked as read', data: notification });
   } catch (error) {
     next(error);
   }
 });
 
-// PUT /api/v1/notifications/:notificationId/archive
-router.put('/:notificationId/archive', authMiddleware, notificationLimiter, validateId, handleValidationErrors, async (req, res, next) => {
+// ─── PUT /:notificationId/archive — archive a notification ────────────────
+router.put('/:notificationId/archive', authMiddleware, async (req, res, next) => {
   try {
     const notification = await notificationService.archiveNotification(req.params.notificationId);
-    res.status(200).json(new ApiResponse(200, notification, 'Notification archived'));
+    res.json({ success: true, message: 'Notification archived', data: notification });
   } catch (error) {
     next(error);
   }

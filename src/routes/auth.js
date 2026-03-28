@@ -1,233 +1,165 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
-const { body, validationResult } = require('express-validator');
 
-const authController = require('../controllers/authController');
+const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
+const { generateTokens, verifyRefreshToken } = require('../utils/tokenUtils');
+const { ValidationError, UnauthorizedError, ConflictError } = require('../utils/errors');
 
 const router = express.Router();
 
-// ============ RATE LIMITING ============
+// Rate limiter — max 5 auth attempts per 15 minutes
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 5,                      // 5 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   message: 'Too many auth attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'test'  // Skip in testing
+  skip: () => process.env.NODE_ENV === 'test'
 });
 
-// ============ VALIDATION MIDDLEWARE ============
+// Track failed login attempts in memory
+const loginAttempts = {};
 
-// Validate Register
-const validateRegister = [
-  body('email')
-    .isEmail()
-    .withMessage('Invalid email format')
-    .normalizeEmail()
-    .toLowerCase(),
-  body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
-  body('passwordConfirm')
-    .custom((value, { req }) => value === req.body.password)
-    .withMessage('Passwords do not match'),
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ min: 2 })
-    .withMessage('Name must be at least 2 characters'),
-  body('role')
-    .isIn(['resident', 'syndic', 'gardien'])
-    .withMessage('Invalid role')
-];
+// ─── POST /auth/register ───────────────────────────────────────────────────
+// Create a new user account (resident, syndic, or gardien)
+router.post('/register', authLimiter, async (req, res, next) => {
+  try {
+    let { name, email, password, passwordConfirm, role, building, phone } = req.body;
 
-// Validate Login (ONLY email and password)
-const validateLogin = [
-  body('email')
-    .isEmail()
-    .withMessage('Invalid email format')
-    .normalizeEmail()
-    .toLowerCase(),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-];
+    email = email?.trim().toLowerCase();
+    name = name?.trim();
 
-// Validate Refresh Token
-const validateRefreshToken = [
-  body('refreshToken')
-    .notEmpty()
-    .withMessage('Refresh token is required')
-];
+    if (!name || !email || !password || !passwordConfirm || !role) {
+      throw new ValidationError('name, email, password, passwordConfirm and role are required');
+    }
 
-// Validate Change Password
-const validateChangePassword = [
-  body('currentPassword')
-    .notEmpty()
-    .withMessage('Current password is required'),
-  body('newPassword')
-    .isLength({ min: 8 })
-    .withMessage('New password must be at least 8 characters'),
-  body('passwordConfirm')
-    .custom((value, { req }) => value === req.body.newPassword)
-    .withMessage('Passwords do not match')
-];
+    if (password !== passwordConfirm) {
+      throw new ValidationError('Passwords do not match');
+    }
 
-// Validation error handler
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      statusCode: 400,
-      success: false,
-      message: req.t ? req.t('errors.validation_error') : 'Validation error',
-      errors: errors.array().map(err => ({
-        field: err.param,
-        message: err.msg
-      }))
-    });
+    if (!['resident', 'syndic', 'gardien'].includes(role)) {
+      throw new ValidationError('Role must be: resident, syndic, or gardien');
+    }
+
+    const existing = await User.findOne({ email });
+    if (existing) throw new ConflictError('Email already registered');
+
+    // Save plain password — User model pre-save hook hashes it automatically
+    const user = new User({ name, email, password, role, building, phone, status: 'active' });
+    await user.save();
+
+    const tokens = generateTokens(user._id, user.role, building);
+
+    res.status(201).json({ success: true, message: 'User registered successfully', data: { user: user.toJSON(), ...tokens } });
+  } catch (error) {
+    next(error);
   }
-  next();
-};
+});
 
-// ============ PUBLIC ROUTES (No authentication required) ============
+// ─── POST /auth/login ──────────────────────────────────────────────────────
+// Login with email and password, returns access + refresh tokens
+router.post('/login', authLimiter, async (req, res, next) => {
+  try {
+    let { email, password } = req.body;
+    email = email?.trim().toLowerCase();
 
-/**
- * POST /api/v1/auth/register
- * @description Register a new user
- * @public
- * @body {
- *   email: string (required, valid email),
- *   password: string (required, min 8 chars),
- *   passwordConfirm: string (required, must match password),
- *   name: string (required, min 2 chars),
- *   phone: string (optional),
- *   role: string (required, one of: resident, syndic, gardien),
- *   building: string (optional, ObjectId)
- * }
- * @returns {
- *   statusCode: 201,
- *   success: true,
- *   message: string,
- *   data: { user, accessToken, refreshToken }
- * }
- */
-router.post(
-  '/register',
-  authLimiter,
-  validateRegister,
-  handleValidationErrors,
-  authController.register
-);
+    if (!email || !password) throw new ValidationError('Email and password are required');
 
-/**
- * POST /api/v1/auth/login
- * @description Login user with email and password
- * @public
- * @body {
- *   email: string (required, valid email),
- *   password: string (required),
- *   deviceToken: string (optional, for push notifications),
- *   platform: string (optional, one of: ios, android, web)
- * }
- * @returns {
- *   statusCode: 200,
- *   success: true,
- *   message: string,
- *   data: { user, accessToken, refreshToken }
- * }
- */
-router.post(
-  '/login',
-  authLimiter,
-  validateLogin,
-  handleValidationErrors,
-  authController.login
-);
+    // Block after 5 failed attempts
+    if ((loginAttempts[email] || 0) >= 5) {
+      throw new UnauthorizedError('Too many failed attempts. Try again later.');
+    }
 
-/**
- * POST /api/v1/auth/refresh-token
- * @description Refresh access token using refresh token
- * @public
- * @body { refreshToken: string (required) }
- * @returns {
- *   statusCode: 200,
- *   success: true,
- *   message: string,
- *   data: { accessToken, refreshToken }
- * }
- */
-router.post(
-  '/refresh-token',
-  validateRefreshToken,
-  handleValidationErrors,
-  authController.refreshToken
-);
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      loginAttempts[email] = (loginAttempts[email] || 0) + 1;
+      throw new UnauthorizedError('Invalid email or password');
+    }
 
-// ============ PROTECTED ROUTES (Require Authentication) ============
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      loginAttempts[email] = (loginAttempts[email] || 0) + 1;
+      throw new UnauthorizedError('Invalid email or password');
+    }
 
-/**
- * POST /api/v1/auth/change-password
- * @description Change user password (requires authentication)
- * @protected
- * @auth Required (Bearer token in Authorization header)
- * @body {
- *   currentPassword: string (required),
- *   newPassword: string (required, min 8 chars),
- *   passwordConfirm: string (required, must match newPassword)
- * }
- * @returns {
- *   statusCode: 200,
- *   success: true,
- *   message: string,
- *   data: null
- * }
- */
-router.post(
-  '/change-password',
-  authMiddleware,
-  validateChangePassword,
-  handleValidationErrors,
-  authController.changePassword
-);
+    if (user.status !== 'active') throw new UnauthorizedError('Account is not active');
 
-/**
- * GET /api/v1/auth/me
- * @description Get current authenticated user's information
- * @protected
- * @auth Required (Bearer token in Authorization header)
- * @returns {
- *   statusCode: 200,
- *   success: true,
- *   message: string,
- *   data: { user }
- * }
- */
-router.get(
-  '/me',
-  authMiddleware,
-  authController.getCurrentUser
-);
+    delete loginAttempts[email];
+    user.lastLogin = new Date();
+    await user.save();
 
-/**
- * POST /api/v1/auth/logout
- * @description Logout user and optionally remove device token
- * @protected
- * @auth Required (Bearer token in Authorization header)
- * @body { deviceToken: string (optional) }
- * @returns {
- *   statusCode: 200,
- *   success: true,
- *   message: string,
- *   data: null
- * }
- */
-router.post(
-  '/logout',
-  authMiddleware,
-  authController.logout
-);
+    const tokens = generateTokens(user._id, user.role, user.building);
+
+    res.json({ success: true, message: 'Login successful', data: { user: user.toJSON(), ...tokens } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── POST /auth/refresh-token ──────────────────────────────────────────────
+// Get a new access token using a refresh token
+router.post('/refresh-token', async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) throw new ValidationError('Refresh token is required');
+
+    const decoded = verifyRefreshToken(refreshToken);
+    const user = await User.findById(decoded.userId);
+    if (!user) throw new UnauthorizedError('User not found');
+
+    const tokens = generateTokens(user._id, user.role, user.building);
+    res.json({ success: true, message: 'Token refreshed', data: tokens });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── GET /auth/me ──────────────────────────────────────────────────────────
+// Get the currently logged-in user's profile
+router.get('/me', authMiddleware, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password -deviceTokens');
+    if (!user) throw new UnauthorizedError('User not found');
+    res.json({ success: true, message: 'User retrieved', data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── POST /auth/change-password ────────────────────────────────────────────
+// Change the logged-in user's password
+router.post('/change-password', authMiddleware, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, passwordConfirm } = req.body;
+
+    if (!currentPassword || !newPassword || !passwordConfirm) {
+      throw new ValidationError('All fields are required');
+    }
+    if (newPassword !== passwordConfirm) throw new ValidationError('Passwords do not match');
+    if (currentPassword === newPassword) throw new ValidationError('New password must be different');
+
+    const user = await User.findById(req.user._id).select('+password');
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) throw new UnauthorizedError('Current password is incorrect');
+
+    // Set plain password — pre-save hook will hash it
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ success: true, message: 'Password changed successfully', data: null });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── POST /auth/logout ─────────────────────────────────────────────────────
+// Logout — client should discard their tokens
+router.post('/logout', authMiddleware, async (req, res, next) => {
+  try {
+    res.json({ success: true, message: 'Logged out successfully', data: null });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;

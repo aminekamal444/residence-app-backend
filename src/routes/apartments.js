@@ -1,104 +1,127 @@
 const express = require('express');
-const { param, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
-
-const apartmentController = require('../controllers/apartmentController');
-const authMiddleware = require('../middleware/authMiddleware');
-const roleMiddleware = require('../middleware/roleMiddleware');
-
 const router = express.Router();
 
-// ============ RATE LIMITING ============
-const apartmentLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many apartment requests'
+const Apartment = require('../models/Apartment');
+const authMiddleware = require('../middleware/authMiddleware');
+const roleMiddleware = require('../middleware/roleMiddleware');
+const { ValidationError, NotFoundError } = require('../utils/errors');
+
+// ─── GET / — get all apartments in this building ──────────────────────────
+router.get('/', authMiddleware, async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const query = { building: req.user.building };
+    if (status) query.status = status;
+
+    const apartments = await Apartment.find(query)
+      .populate('resident', 'name email phone')
+      .populate('building', 'name')
+      .skip((page - 1) * limit).limit(Number(limit))
+      .sort({ floor: 1, number: 1 });
+
+    const total = await Apartment.countDocuments(query);
+    res.json({ success: true, message: 'Apartments retrieved', data: { apartments, total, pages: Math.ceil(total / limit) } });
+  } catch (error) {
+    next(error);
+  }
 });
 
-// ============ VALIDATION ============
-const validateApartmentId = param('apartmentId')
-  .isMongoId()
-  .withMessage('Invalid apartment ID format');
+// ─── POST / — create a new apartment (syndic only) ────────────────────────
+router.post('/', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const { number, floor, area, rooms, bathrooms, features, monthlyCharge } = req.body;
+    if (!number || !floor) throw new ValidationError('number and floor are required');
 
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      statusCode: 400,
-      success: false,
-      message: 'Validation error',
-      errors: errors.array()
+    const apartment = new Apartment({
+      building: req.user.building,
+      number,
+      floor,
+      size: area || null,
+      bedrooms: rooms || 0,
+      bathrooms: bathrooms || 0,
+      features,
+      monthlyCharge: monthlyCharge || 0,
+      status: 'vacant'
     });
+    await apartment.save();
+
+    res.status(201).json({ success: true, message: 'Apartment created', data: apartment });
+  } catch (error) {
+    next(error);
   }
-  next();
-};
+});
 
-// ============ GET ALL ============
-router.get(
-  '/',
-  authMiddleware,
-  apartmentLimiter,
-  apartmentController.getAllApartments
-);
+// ─── POST /:apartmentId/assign-resident — assign a resident (syndic only) ──
+router.post('/:apartmentId/assign-resident', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const { residentId } = req.body;
+    if (!residentId) throw new ValidationError('residentId is required');
 
-// ============ CREATE ============
-router.post(
-  '/',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  apartmentLimiter,
-  apartmentController.createApartment
-);
+    const apartment = await Apartment.findByIdAndUpdate(
+      req.params.apartmentId,
+      { resident: residentId, status: 'occupied' },
+      { new: true }
+    ).populate('resident', 'name email');
 
-// ============ SPECIFIC WITH DYNAMIC ID ============
-router.post(
-  '/:apartmentId/assign-resident',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  apartmentLimiter,
-  validateApartmentId,
-  handleValidationErrors,
-  apartmentController.assignResident
-);
+    if (!apartment) throw new NotFoundError('Apartment not found');
+    res.json({ success: true, message: 'Resident assigned', data: apartment });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.delete(
-  '/:apartmentId/resident',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  apartmentLimiter,
-  validateApartmentId,
-  handleValidationErrors,
-  apartmentController.removeResident
-);
+// ─── DELETE /:apartmentId/resident — remove resident from apartment ─────────
+router.delete('/:apartmentId/resident', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const apartment = await Apartment.findByIdAndUpdate(
+      req.params.apartmentId,
+      { resident: null, status: 'vacant' },
+      { new: true }
+    );
+    if (!apartment) throw new NotFoundError('Apartment not found');
+    res.json({ success: true, message: 'Resident removed', data: apartment });
+  } catch (error) {
+    next(error);
+  }
+});
 
-// ============ BARE DYNAMIC (LAST!) ============
-router.get(
-  '/:apartmentId',
-  authMiddleware,
-  apartmentLimiter,
-  validateApartmentId,
-  handleValidationErrors,
-  apartmentController.getApartmentById
-);
+// ─── GET /:apartmentId — get one apartment by ID ──────────────────────────
+router.get('/:apartmentId', authMiddleware, async (req, res, next) => {
+  try {
+    const apartment = await Apartment.findById(req.params.apartmentId)
+      .populate('resident', 'name email phone')
+      .populate('building', 'name address');
+    if (!apartment) throw new NotFoundError('Apartment not found');
+    res.json({ success: true, message: 'Apartment retrieved', data: apartment });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.put(
-  '/:apartmentId',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  apartmentLimiter,
-  validateApartmentId,
-  handleValidationErrors,
-  apartmentController.updateApartment
-);
+// ─── PUT /:apartmentId — update apartment details (syndic only) ─────────────
+router.put('/:apartmentId', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const apartment = await Apartment.findByIdAndUpdate(
+      req.params.apartmentId,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!apartment) throw new NotFoundError('Apartment not found');
+    res.json({ success: true, message: 'Apartment updated', data: apartment });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.delete(
-  '/:apartmentId',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  apartmentLimiter,
-  validateApartmentId,
-  handleValidationErrors,
-  apartmentController.deleteApartment
-);
+// ─── DELETE /:apartmentId — delete an apartment (syndic only) ───────────────
+router.delete('/:apartmentId', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const apartment = await Apartment.findByIdAndDelete(req.params.apartmentId);
+    if (!apartment) throw new NotFoundError('Apartment not found');
+    res.json({ success: true, message: 'Apartment deleted', data: null });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;

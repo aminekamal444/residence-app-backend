@@ -1,99 +1,117 @@
 const express = require('express');
-const { param, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
-
-const chargeController = require('../controllers/chargeController');
-const authMiddleware = require('../middleware/authMiddleware');
-const roleMiddleware = require('../middleware/roleMiddleware');
-
 const router = express.Router();
 
-// ============ RATE LIMITING ============
-const chargeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many charge requests'
+const Charge = require('../models/Charge');
+const authMiddleware = require('../middleware/authMiddleware');
+const roleMiddleware = require('../middleware/roleMiddleware');
+const { ValidationError, NotFoundError } = require('../utils/errors');
+
+// ─── GET / — get all charges in this building ─────────────────────────────
+router.get('/', authMiddleware, async (req, res, next) => {
+  try {
+    const { status, category, page = 1, limit = 10 } = req.query;
+    const query = { building: req.user.building };
+    if (status) query.status = status;
+    if (category) query.category = category;
+
+    const charges = await Charge.find(query)
+      .populate('apartment', 'number')
+      .skip((page - 1) * limit).limit(Number(limit))
+      .sort({ dueDate: -1 });
+
+    const total = await Charge.countDocuments(query);
+    res.json({ success: true, message: 'Charges retrieved', data: { charges, total, pages: Math.ceil(total / limit) } });
+  } catch (error) {
+    next(error);
+  }
 });
 
-// ============ VALIDATION ============
-const validateChargeId = param('chargeId')
-  .isMongoId()
-  .withMessage('Invalid charge ID format');
+// ─── POST / — create a charge for an apartment (syndic only) ──────────────
+router.post('/', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const { apartment, amount, description, dueDate, category } = req.body;
+    if (!apartment || !amount || !dueDate || !category) {
+      throw new ValidationError('apartment, amount, dueDate and category are required');
+    }
 
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      statusCode: 400,
-      success: false,
-      message: 'Validation error',
-      errors: errors.array()
+    const charge = new Charge({
+      building: req.user.building,
+      apartment,
+      amount,
+      description,
+      dueDate,
+      category,
+      status: 'pending',
+      createdBy: req.user._id
     });
+    await charge.save();
+
+    res.status(201).json({ success: true, message: 'Charge created', data: charge });
+  } catch (error) {
+    next(error);
   }
-  next();
-};
+});
 
-// ============ CREATE ============
-router.post(
-  '/',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  chargeLimiter,
-  chargeController.createCharge
-);
+// ─── GET /overdue/list — get all overdue charges (syndic only) ─────────────
+router.get('/overdue/list', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const charges = await Charge.find({
+      building: req.user.building,
+      dueDate: { $lt: new Date() },
+      status: { $nin: ['paid', 'cancelled'] }
+    }).populate('apartment').sort({ dueDate: 1 });
 
-// ============ SPECIFIC PATHS (BEFORE DYNAMIC!) ============
-router.get(
-  '/overdue/list',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  chargeLimiter,
-  chargeController.getOverdueCharges
-);
+    res.json({ success: true, message: 'Overdue charges retrieved', data: charges });
+  } catch (error) {
+    next(error);
+  }
+});
 
-// ============ DYNAMIC PATHS ============
-router.get(
-  '/apartment/:apartmentId',
-  authMiddleware,
-  chargeLimiter,
-  chargeController.getChargesByApartment
-);
+// ─── GET /apartment/:apartmentId — get charges for a specific apartment ────
+router.get('/apartment/:apartmentId', authMiddleware, async (req, res, next) => {
+  try {
+    const charges = await Charge.find({ apartment: req.params.apartmentId }).sort({ dueDate: -1 });
+    res.json({ success: true, message: 'Apartment charges retrieved', data: charges });
+  } catch (error) {
+    next(error);
+  }
+});
 
-// ============ BARE DYNAMIC (LAST!) ============
-router.get(
-  '/:chargeId',
-  authMiddleware,
-  chargeLimiter,
-  validateChargeId,
-  handleValidationErrors,
-  chargeController.getChargeById
-);
+// ─── GET /:chargeId — get one charge by ID ────────────────────────────────
+router.get('/:chargeId', authMiddleware, async (req, res, next) => {
+  try {
+    const charge = await Charge.findById(req.params.chargeId).populate('apartment').populate('building');
+    if (!charge) throw new NotFoundError('Charge not found');
+    res.json({ success: true, message: 'Charge retrieved', data: charge });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.get(
-  '/',
-  authMiddleware,
-  chargeLimiter,
-  chargeController.getAllCharges
-);
+// ─── PUT /:chargeId — update a charge (syndic only) ───────────────────────
+router.put('/:chargeId', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const updates = { ...req.body };
+    delete updates.status;
+    delete updates.building;
 
-router.put(
-  '/:chargeId',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  chargeLimiter,
-  validateChargeId,
-  handleValidationErrors,
-  chargeController.updateCharge
-);
+    const charge = await Charge.findByIdAndUpdate(req.params.chargeId, updates, { new: true, runValidators: true });
+    if (!charge) throw new NotFoundError('Charge not found');
+    res.json({ success: true, message: 'Charge updated', data: charge });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.delete(
-  '/:chargeId',
-  authMiddleware,
-  roleMiddleware(['syndic']),
-  chargeLimiter,
-  validateChargeId,
-  handleValidationErrors,
-  chargeController.deleteCharge
-);
+// ─── DELETE /:chargeId — delete a charge (syndic only) ────────────────────
+router.delete('/:chargeId', authMiddleware, roleMiddleware(['syndic']), async (req, res, next) => {
+  try {
+    const charge = await Charge.findByIdAndDelete(req.params.chargeId);
+    if (!charge) throw new NotFoundError('Charge not found');
+    res.json({ success: true, message: 'Charge deleted', data: null });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;
